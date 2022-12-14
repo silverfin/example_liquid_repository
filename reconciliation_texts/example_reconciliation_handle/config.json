@@ -1,0 +1,18 @@
+{
+  "handle": "example_reconciliation_handle",
+  "name_en": "Example Reconciliation",
+  "auto_hide_formula": "",
+  "text_configuration": null,
+  "virtual_account_number": "",
+  "reconciliation_type": "only_reconciled_with_data",
+  "public": false,
+  "allow_duplicate_reconciliations": false,
+  "is_active": true,
+  "externally_managed": false,
+  "id": "",
+  "text": "main.liquid",
+  "text_parts": {
+    "content_config": "text_parts/example_part_1.liquid"
+  },
+  "test": "tests/example_reconciliation_handle_liquid_test.yml"
+}

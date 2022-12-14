@@ -1,0 +1,10 @@
+sample_test:
+  context:
+    period: 2021-12-31
+  data:
+    periods:
+      2021-12-31:
+  expectation:
+    reconciled: true
+    results:
+      some_result: 123

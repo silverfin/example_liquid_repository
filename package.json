@@ -1,0 +1,10 @@
+{
+  "name": "example_repository",
+  "description": "Example Repository",
+  "repository": "",
+  "license": "",
+  "private": true,
+  "scripts": {
+    "silverfin": "node ./node_modules/sf_toolkit/bin/cli.js"
+  }
+}
