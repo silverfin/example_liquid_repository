@@ -1,6 +1,5 @@
-name: run_liquid_tests
+name: run-liquid-tests
 run-name: Run Liquid tests of updated reconciliations
-#on: [push, pull_request]
 on: pull_request
 permissions:
   contents: read
@@ -21,7 +20,7 @@ jobs:
           node-version: 18
       - name: Add sf-toolkit package latest version
         run: |
-          npm install https://github.com/silverfin/sf-toolkit.git#run-liquid-test-raw-output
+          npm install https://github.com/silverfin/sf-toolkit.git
           VERSION=$(./node_modules/sf_toolkit/bin/cli.js -V)
           echo "CLI version: ${VERSION}"
       - name: Create Silverfin config file
@@ -29,7 +28,7 @@ jobs:
           mkdir -p $HOME/.silverfin/
           touch $HOME/.silverfin/config.json
           echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
-          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="$FIRM_ID"
+          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="${{ vars.FIRM_ID_LIQUID_TESTS }}"
           node ./node_modules/sf_toolkit/bin/cli.js config --get-firm
       - name: Get changed files in the reconciliation_texts folder
         id: changed-files-reconciliations
@@ -54,7 +53,7 @@ jobs:
                 echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
                 if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
                   # RUN TEST
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle="${HANDLE}" --status)
+                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle="${HANDLE}" --status 2>&1)
                   # CHECK OUTPUT
                   if [[ "$OUTPUT" =~ "PASSED" ]]; then
                     echo "${HANDLE}: passed"

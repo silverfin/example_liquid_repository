@@ -1,13 +1,14 @@
-name: update_liquid_templates
-run-name: Update Liquid templates
+name: update-liquid-templates-review
+run-name: Update Liquid templates to be reviewed
+# We run this action when a "functional review" label is added to the PR
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types: [labeled]
 permissions:
   contents: read
 jobs:
-  test-templates:
+  update-templates-for-review:
+    if: ${{ github.event.label.name == 'functional-review' }}
     runs-on: ubuntu-latest
     env:
       SF_API_CLIENT_ID: "${{ secrets.SF_API_CLIENT_ID }}"
@@ -23,7 +24,7 @@ jobs:
           node-version: 18
       - name: Add sf-toolkit package latest version
         run: |
-          npm install https://github.com/silverfin/sf-toolkit.git#run-liquid-test-raw-output
+          npm install https://github.com/silverfin/sf-toolkit.git
           VERSION=$(./node_modules/sf_toolkit/bin/cli.js -V)
           echo "CLI version: ${VERSION}"
       - name: Create Silverfin config file
@@ -31,7 +32,7 @@ jobs:
           mkdir -p $HOME/.silverfin/
           touch $HOME/.silverfin/config.json
           echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
-          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="$FIRM_ID"
+          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="${{ vars.FIRM_ID_REVIEW }}"
           node ./node_modules/sf_toolkit/bin/cli.js config --get-firm
       - name: Get changed liquid files
         id: changed-files
