@@ -1,5 +1,5 @@
 name: update-liquid-templates-production
-run-name: Update Liquid templates
+run-name: Update liquid templates for deployment to partner
 # We run this action when a PR is closed and merged into the main branch
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   update-templates-in-production:
-    if: ${{ github.event.pull_request.merged == true }}
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     env:
       SF_API_CLIENT_ID: "${{ secrets.SF_API_CLIENT_ID }}"
@@ -53,26 +53,32 @@ jobs:
       - name: Update liquid templates
         run: |
           declare -a ERRORS
+          FIRM_ID=${{ vars.FIRM_ID_PRODUCTION }}
           for CURRENT_DIR in ${{ steps.changed-files.outputs.all_changed_files }}; do
             echo "Checking ${CURRENT_DIR}"
             while [[ "${CURRENT_DIR}" != "." ]]; do
               if [[ -e "${CURRENT_DIR}/config.json" ]]; then
-                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
                 echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
-                if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js update-reconciliation --handle="${HANDLE}" --yes)
-                elif [[ "${CURRENT_DIR}" == *shared_parts* ]]; then
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js update-shared-part --shared-part="${HANDLE}" --yes)
-                fi
-                if [[ "$OUTPUT" =~ "201" ]]; then
-                  echo "${HANDLE}: updated"
+                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
+                FIRM_IDS=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq -r ".[]")
+                if  [[ "${FIRM_IDS[*]}" =~ "${FIRM_ID}" ]]; then
+                  if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
+                    OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js update-reconciliation --handle="${HANDLE}" --yes)
+                  elif [[ "${CURRENT_DIR}" == *shared_parts* ]]; then
+                    OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js update-shared-part --shared-part="${HANDLE}" --yes)
+                  fi
+                  if [[ "$OUTPUT" =~ "201" ]]; then
+                    echo "${HANDLE}: updated"
+                  else
+                    echo "${HANDLE}: failed"
+                    ERRORS+=("${OUTPUT}")
+                  fi
                 else
-                  echo "${HANDLE}: failed"
-                  ERRORS+=("${OUTPUT}")
+                  echo "${HANDLE}: firm ${FIRM_ID} not present in config.json; skipping update"
                 fi
                 break
               else
-                echo "File not found in ${CURRENT_DIR}"
+                echo "Config file not found in ${CURRENT_DIR}"
                 CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
               fi
             done
@@ -84,6 +90,21 @@ jobs:
               echo "Errors: ${ERRORS[@]}"
               exit 1
           fi
+      - name: Remove all labels
+        uses: rogerluan/label-remover@v1.0.1
+        with:
+          github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
+      - name: Add deploy to partner label
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ["3-deploy-to-partner"]
+            })
       - name: Prepare CONFIG_JSON for secret
         run: |
           CONFIG_JSON=$(cat $HOME/.silverfin/config.json | tr -d '\n')
