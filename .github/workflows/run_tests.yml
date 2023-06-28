@@ -1,5 +1,5 @@
 name: run-liquid-tests
-run-name: Run Liquid tests of updated reconciliations
+run-name: Run liquid tests of updated reconciliations and reconciliations that use updated shared parts
 on: pull_request
 permissions:
   contents: read
@@ -28,13 +28,11 @@ jobs:
           mkdir -p $HOME/.silverfin/
           touch $HOME/.silverfin/config.json
           echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
-          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="${{ vars.FIRM_ID_LIQUID_TESTS }}"
-          node ./node_modules/sf_toolkit/bin/cli.js config --get-firm
       - name: Get changed files in the reconciliation_texts folder
         id: changed-files-reconciliations
         uses: tj-actions/changed-files@v35
         with:
-          since_last_remote_commit: true
+          since_last_remote_commit: false
           dir_names: true
           files: "reconciliation_texts"
       - name: List all changed files in the reconciliation_texts folder
@@ -50,15 +48,18 @@ jobs:
             while [[ "${CURRENT_DIR}" != "." ]]; do
               if [[ -e "${CURRENT_DIR}/config.json" ]]; then
                 HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
-                echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
+                FIRM_ID=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq "first" | tr -d '"')
                 if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
                   # RUN TEST
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle="${HANDLE}" --status 2>&1)
+                  echo "Running tests for ${HANDLE} in firm ${FIRM_ID}"
+                  FORMATTED_OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
+                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
                   # CHECK OUTPUT
                   if [[ "$OUTPUT" =~ "PASSED" ]]; then
                     echo "${HANDLE}: passed"
                   elif [[ "$OUTPUT" =~ "FAILED" ]]; then
                     echo "${HANDLE}: failed"
+                    echo "Details of test run: ${FORMATTED_OUTPUT}"
                     ERRORS+=("${HANDLE}")
                   else
                     echo "${HANDLE}: other errors: ${OUTPUT}"
@@ -67,7 +68,7 @@ jobs:
                 fi
                 break
               else
-                echo "File not found in ${CURRENT_DIR}"
+                echo "Config file not found in ${CURRENT_DIR}"
                 CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
               fi
             done
@@ -76,14 +77,14 @@ jobs:
           if [ ${#ERRORS[@]} -eq 0 ]; then
               echo "All tests have passed"
           else
-              echo "Errors: ${ERRORS[@]}"
+              echo "Errors: ${ERRORS[@]}, please run the tests locally to fix the errors"
               exit 1
           fi
       - name: Get changed files in the shared_parts folder
         id: changed-files-shared-parts
         uses: tj-actions/changed-files@v35
         with:
-          since_last_remote_commit: true
+          since_last_remote_commit: false
           dir_names: true
           files: "shared_parts"
       - name: List all changed files in the shared_parts folder
@@ -102,22 +103,30 @@ jobs:
                 HANDLES=$(echo "$JSON" | jq -r '.used_in[].handle')
                 # LOOP THROUGH EACH RECONCILIATION
                 for HANDLE in $HANDLES; do
-                  # RUN TEST
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle="${HANDLE}" --status)
-                  # CHECK OUTPUT
-                  if [[ "$OUTPUT" =~ "PASSED" ]]; then
-                    echo "${HANDLE}: passed"
-                  elif [[ "$OUTPUT" =~ "FAILED" ]]; then
-                    echo "${HANDLE}: failed"
-                    ERRORS+=("${HANDLE}")
-                  else
-                    echo "${HANDLE}: other errors: ${OUTPUT}"
-                    ERRORS+=("${OUTPUT}")
+                  # CHECK IF RECONCILIATION CONFIG IS IMPORTED
+                  if [[ -f "./reconciliation_texts/${HANDLE}/config.json" ]]; then
+                    # RUN THE TEST FOR THE FIRST FIRM ID IN THE RECONCILIATION CONFIG
+                    FIRM_ID=$(cat ./reconciliation_texts/${HANDLE}/config.json | jq -r ".id" | jq "keys_unsorted" | jq "first" | tr -d '"')
+                    # RUN TEST
+                    echo "Running tests for ${HANDLE} in firm ${FIRM_ID}"
+                    FORMATTED_OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
+                    OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
+                    # CHECK OUTPUT
+                    if [[ "$OUTPUT" =~ "PASSED" ]]; then
+                      echo "${HANDLE}: passed"
+                    elif [[ "$OUTPUT" =~ "FAILED" ]]; then
+                      echo "${HANDLE}: failed"
+                      echo "Details of test run: ${FORMATTED_OUTPUT}"
+                      ERRORS+=("${HANDLE}")
+                    else
+                      echo "${HANDLE}: other errors: ${OUTPUT}"
+                      ERRORS+=("${OUTPUT}")
+                    fi
                   fi
                 done
                 break
               else
-                echo "File not found in ${CURRENT_DIR}"
+                echo "Config file not found in ${CURRENT_DIR}"
                 CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
               fi
             done
@@ -126,7 +135,7 @@ jobs:
           if [ ${#ERRORS[@]} -eq 0 ]; then
               echo "All tests have passed"
           else
-              echo "Errors: ${ERRORS[@]}"
+              echo "Errors: ${ERRORS[@]}, please run the tests locally to fix the errors"
               exit 1
           fi
       - name: Prepare CONFIG_JSON for secret

@@ -37,7 +37,7 @@ The following tools assume that you use the structure detailed by this repositor
 
 - Create `SF_API_CLIENT_ID` & `SF_API_SECRET` secrets.
 - Create a secret named `CONFIG_JSON` where you replicate a local `~/.silverfin/config.json`. It is important to note that the token's pair that this Action is going to use shouldn't be also used by other users, since it will be revoked eventually.
-- Set variables named `FIRM_ID_LIQUID_TESTS`, `FIRM_ID_REVIEW`, `FIRM_ID_PRODUCTION`.
+- Set variables named `FIRM_ID_REVIEW`, `FIRM_ID_PRODUCTION`.
 - Create a [Personal Access Token](https://github.com/settings/personal-access-tokens/new).
   - Set it to only have access to the repository needed and nothing else.
   - Limit it's scope as much as possible.
@@ -52,6 +52,12 @@ The following tools assume that you use the structure detailed by this repositor
 
 As they are defined right now, these workflows will be triggered in different situations:
 
-- "Run Liquid Tests" will be run when any change is made in an existing Pull Request (created, updated, closed). It will use the variable "FIRM_ID_LIQUID_TEST" to specify in which firm the liquid tests will be run.
-- "Update Liquid Templates - Review" will be run when a label named "functional-review" is added to a PR. It will use the variable "FIRM_ID_REVIEW" to establish to which firm the updates will be pushed.
-- "Update Liquid Templates - Production" will be run when a PR is closed and merged to the main branch. It will use the variable "FIRM_ID_PRODUCTION" to establish to which firm the updates will be pushed.
+- "run_tests":
+  - Use: automatically runs the liquid tests of the updated reconciliations as well as the liquid tests of all the reconciliations linked to an updated shared part.
+  - Run: will be run when any change is made in an existing Pull Request (created, updated, closed). It will use take the first firm ID from the config.json from the reconciliation to specify in which firm the liquid tests will be run.
+- "update_templates_review":
+  - Use: automatically updates the changes liquid templates to the firm specified in the variable "FIRM_ID_REVIEW", which is the firm where the functional review will be done after the main development / code review is over.
+  - Run: will be run when a label named "2-functional-review" is added to a PR and on every subsequent push to this PR while this label is still added. It will use the variable "FIRM_ID_REVIEW" to establish to which firm the updates will be pushed.
+- "update_templates_production":
+  - Use: automatically updates the changes liquid templates to the firm specified in the variable "FIRM_ID_PRODUCTION", which is the firm where a 'custom template' copy of all the templates exist which are equal to the partner templates. This is the firm where the templates needs to copied from to partner. Will automatically remove all previously added labels and add the label '3-deploy-to-partner'.
+  - Run: will be run when a PR is closed and merged to the main branch. It will use the variable "FIRM_ID_PRODUCTION" to establish to which firm the updates will be pushed.
