@@ -61,3 +61,8 @@ As they are defined right now, these workflows will be triggered in different si
 - "update_templates_production":
   - Use: automatically updates the changes liquid templates to the firm specified in the variable "FIRM_ID_PRODUCTION", which is the firm where a 'custom template' copy of all the templates exist which are equal to the partner templates. This is the firm where the templates needs to copied from to partner. Will automatically remove all previously added labels and add the label '3-deploy-to-partner'.
   - Run: will be run when a PR is closed and merged to the main branch. It will use the variable "FIRM_ID_PRODUCTION" to establish to which firm the updates will be pushed.
+- "add_shared_parts_review":
+  - Use: automatically adds the shared parts to the firm specified in the variable "FIRM_ID_REVIEW", which is the firm where the functional review will be done after the main development / code review is over.
+  - Run: will be run when a label named "add-shared-parts-review-firm" is added to a PR. It will use the variable "FIRM_ID_REVIEW" to establish to which firm the updates will be pushed. Once it's finished, labeles will be automatically removed and a comment will be inserted in the PR.
+- "add_shared_parts_production":
+  - Use: automatically adds the shared parts to the firm specified in the variable "FIRM_ID_PRODUCTION". This is the firm where the templates needs to copied from to partner. Once it's finished, labeles will be automatically removed and a comment will be inserted in the PR.
