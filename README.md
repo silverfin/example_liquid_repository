@@ -42,6 +42,9 @@ The following tools assume that you use the structure detailed by this repositor
   - Set it to only have access to the repository needed and nothing else.
   - Limit it's scope as much as possible.
   - Permissions:
+    - Environments: `Read and Write`
+    - Metadata: `Read-only`
+    - Pull requests: `Read and Write`
     - Secrets: `Read and Write`
   - Store it as a secret named `REPO_ACCESS_TOKEN`
 
