@@ -59,9 +59,9 @@ jobs:
             echo "Checking directory: ${CURRENT_DIR}"
             while [[ "${CURRENT_DIR}" != "." ]]; do
               if [[ -e "${CURRENT_DIR}/config.json" ]]; then
+                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
                 echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
 
-                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
                 FIRM_IDS=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq -r ".[]")
 
                 # Set template type
@@ -81,7 +81,7 @@ jobs:
                 if  [[ "${FIRM_IDS[*]}" =~ "${FIRM_ID}" ]]; then
                   TEMPLATE_ID_PRESENT=true
                 fi
-                echo "Is firm id present in the config.json of template ${HANDLE}?: ${TEMPLATE_ID_PRESENT}"
+                echo "Is firm id ${FIRM_ID} present in the config.json of template ${HANDLE}?: ${TEMPLATE_ID_PRESENT}"
 
                 # If we don't have the ID, try to get it from the firm
                 if [[ "$TEMPLATE_ID_PRESENT" == 'false' ]]; then
@@ -138,7 +138,7 @@ jobs:
         uses: rogerluan/label-remover@v1.0.1
         with:
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-      - name: Add deploy to partner label
+      - name: Add deployed to production label
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -147,8 +147,19 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: ["3-deploy-to-partner"]
+              labels: ["4-deployed-to-production"]
             })
+      # Not working because the PR is already closed
+      # - name: Add Comment to PR
+      #   uses: actions/github-script@v6
+      #   with:
+      #     script: |
+      #       github.rest.issues.createComment({
+      #         issue_number: context.issue.number,
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         body: 'All templates were updated (or created) succesfully in the "Production firm"'
+      #       })
       - name: Prepare CONFIG_JSON for secret
         run: |
           CONFIG_JSON=$(cat $HOME/.silverfin/config.json | tr -d '\n')

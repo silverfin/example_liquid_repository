@@ -72,9 +72,9 @@ jobs:
             echo "Checking directory: ${CURRENT_DIR}"
             while [[ "${CURRENT_DIR}" != "." ]]; do
               if [[ -e "${CURRENT_DIR}/config.json" ]]; then
+                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
                 echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
 
-                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
                 FIRM_IDS=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq -r ".[]")
 
                 # Set template type
@@ -147,6 +147,16 @@ jobs:
               echo "Errors: ${ERRORS[@]}"
               exit 1
           fi
+      - name: Add Comment to PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'All templates were updated (or created) succesfully in the "Staging firm"'
+            })
       - name: Prepare CONFIG_JSON for secret
         if: always()
         run: |
