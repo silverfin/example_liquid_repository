@@ -5,6 +5,6 @@
   "license": "",
   "private": true,
   "scripts": {
-    "silverfin": "node ./node_modules/sf_toolkit/bin/cli.js"
+    "silverfin": "node ./node_modules/silverfin-cli/bin/cli.js"
   }
 }

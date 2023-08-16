@@ -18,10 +18,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-      - name: Add sf-toolkit package latest version
+      - name: Add silverfin-cli package latest version
         run: |
-          npm install https://github.com/silverfin/sf-toolkit.git
-          VERSION=$(./node_modules/sf_toolkit/bin/cli.js -V)
+          npm install https://github.com/silverfin/silverfin-cli.git
+          VERSION=$(./node_modules/silverfin-cli/bin/cli.js -V)
           echo "CLI version: ${VERSION}"
       - name: Create Silverfin config file
         run: |
@@ -52,8 +52,8 @@ jobs:
                 if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
                   # RUN TEST
                   echo "Running tests for ${HANDLE} in firm ${FIRM_ID}"
-                  FORMATTED_OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
+                  FORMATTED_OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
+                  OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
                   # CHECK OUTPUT
                   if [[ "$OUTPUT" =~ "PASSED" ]]; then
                     echo "${HANDLE}: passed"
@@ -109,8 +109,8 @@ jobs:
                     FIRM_ID=$(cat ./reconciliation_texts/${HANDLE}/config.json | jq -r ".id" | jq "keys_unsorted" | jq "first" | tr -d '"')
                     # RUN TEST
                     echo "Running tests for ${HANDLE} in firm ${FIRM_ID}"
-                    FORMATTED_OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
-                    OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
+                    FORMATTED_OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}")
+                    OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js run-test --handle "${HANDLE}" --firm "${FIRM_ID}" --status 2>&1)
                     # CHECK OUTPUT
                     if [[ "$OUTPUT" =~ "PASSED" ]]; then
                       echo "${HANDLE}: passed"

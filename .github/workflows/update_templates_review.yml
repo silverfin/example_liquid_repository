@@ -38,18 +38,18 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-      - name: Add sf-toolkit package latest version
+      - name: Add silverfin-cli package latest version
         run: |
-          npm install https://github.com/silverfin/sf-toolkit.git
-          VERSION=$(./node_modules/sf_toolkit/bin/cli.js -V)
+          npm install https://github.com/silverfin/silverfin-cli.git
+          VERSION=$(./node_modules/silverfin-cli/bin/cli.js -V)
           echo "CLI version: ${VERSION}"
       - name: Create Silverfin config file
         run: |
           mkdir -p $HOME/.silverfin/
           touch $HOME/.silverfin/config.json
           echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
-          node ./node_modules/sf_toolkit/bin/cli.js config --set-firm="${{ vars.FIRM_ID_REVIEW }}"
-          node ./node_modules/sf_toolkit/bin/cli.js config --get-firm
+          node ./node_modules/silverfin-cli/bin/cli.js config --set-firm="${{ vars.FIRM_ID_REVIEW }}"
+          node ./node_modules/silverfin-cli/bin/cli.js config --get-firm
       - name: Get changed liquid files
         id: changed-files
         uses: tj-actions/changed-files@v35
@@ -100,7 +100,7 @@ jobs:
                 if [[ "$TEMPLATE_ID_PRESENT" == 'false' ]]; then
                   echo "Try to fetch the ID from firm id: ${FIRM_ID}"
                   # get-reconciliation-id or get-shared-part-id
-                  OUTPUT_ID=$(node ./node_modules/sf_toolkit/bin/cli.js get-"${TEMPLATE_TYPE}"-id "${FLAG}"="${HANDLE}" --yes)
+                  OUTPUT_ID=$(node ./node_modules/silverfin-cli/bin/cli.js get-"${TEMPLATE_TYPE}"-id "${FLAG}"="${HANDLE}" --yes)
                 
                   if [[ "$OUTPUT_ID" =~ "ID updated" ]]; then
                     echo "Template: ${HANDLE} ID fetched from firm ${FIRM_ID}"
@@ -116,12 +116,12 @@ jobs:
                 if  [[ "$TEMPLATE_ID_PRESENT" == 'true' ]]; then
                   echo "Updating ${HANDLE}"
                   # update-reconciliation or update-shared-part
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js update-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}" --yes)
+                  OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js update-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}" --yes)
                   OPERATION_TYPE="update"
                 else
                   echo "Creating ${HANDLE}"
                   # create-reconciliation or create-shared-part
-                  OUTPUT=$(node ./node_modules/sf_toolkit/bin/cli.js create-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}")
+                  OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js create-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}")
                   OPERATION_TYPE="create"
                 fi
 

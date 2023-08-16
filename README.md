@@ -4,7 +4,7 @@ If you are developing liquid templates for Silverfin, thhis is an example reposi
 
 The following tools assume that you use the structure detailed by this repository:
 
-- [sf-toolkit](https://github.com/silverfin/sf-toolkit)
+- [silverfin-cli](https://github.com/silverfin/silverfin-cli)
 - [silverfin-vscode](https://github.com/silverfin/silverfin-vscode)
 
 ## Project structure
