@@ -3,7 +3,7 @@ name: check_tests
 run-name: Check YAML tests have been added/updated to PR
 on:
   pull_request:
-    types: [synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
 jobs:
   # Check if at least 1 YAML file has been changed
   check_changed_templates:
