@@ -1,0 +1,51 @@
+
+name: check_tests
+run-name: Check YAML tests have been added/updated to PR
+on:
+  pull_request:
+    types: [synchronize, labeled, unlabeled]
+jobs:
+  # Check if at least 1 YAML file has been changed
+  check_changed_templates:
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'no-test-required') == false
+    steps:
+      # Step 1: Checkout the repository @ $GITHUB_WORKSPACE so workflow can access it
+      - name: Checkout Repository - Fetch history of the current branch
+        uses: actions/checkout@v4
+        with:
+          # Current branch only
+          ref: ${{ github.ref }}
+          # Number of commits. 0 indicates all history;
+          fetch-depth: 0  
+      # Step 2: Get changed YAML files
+      - name: Get changed YAML files
+        id: get-changed-yaml-files
+        uses: tj-actions/changed-files@v46
+        with:
+          # Compare against the main branch
+          base_sha: 'main'
+          since_last_remote_commit: false
+          dir_names: false
+          # Only check for changes to yml/yaml files
+          files: |
+            **/*.{yml,yaml}
+      # Step 3: Print list of changed files (internal maintenance)
+      - name: Print list of changed yml/yaml files
+        id: print-changed-yaml-files
+        run: |
+          echo "Changed files: ${{ steps.get-changed-yaml-files.outputs.all_changed_files }}"
+      # Step 4: Confirm if at least 1 YAML file has been changed
+      - name: Confirm if at least 1 YAML file has been changed
+        id: yaml_files_changed
+        run: |
+          changed_files="${{ steps.get-changed-yaml-files.outputs.all_changed_files }}"
+          if [ -n "$changed_files" ]; then
+            echo "YAML files updated"
+            echo "Changed files: ${{ steps.get-changed-yaml-files.outputs.all_changed_files }}"
+            exit 0
+          else
+            echo "YAML files NOT updated"
+            exit 1
+          fi
