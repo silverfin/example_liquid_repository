@@ -1,0 +1,61 @@
+name: Remove Code Review Label on Review Comments
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  remove-review-label:
+    runs-on: ubuntu-latest
+    
+    # Only run if the review has comments or if it's a review comment
+    if: >
+      (github.event_name == 'pull_request_review' && github.event.review.body != '') ||
+      github.event_name == 'pull_request_review_comment'
+    
+    permissions:
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Remove code-review label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            try {
+              // Check if the label exists on the PR
+              const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+                owner,
+                repo,
+                issue_number: prNumber
+              });
+              
+              const hasCodeReviewLabel = labels.some(label => label.name === 'code-review');
+              
+              if (hasCodeReviewLabel) {
+                // Remove the code-review label
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  name: 'code-review'
+                });
+                
+                console.log(`✅ Removed 'code-review' label from PR #${prNumber}`);
+              } else {
+                console.log(`ℹ️  PR #${prNumber} doesn't have the 'code-review' label`);
+              }
+            } catch (error) {
+              if (error.status === 404) {
+                console.log(`ℹ️  Label 'code-review' not found on PR #${prNumber}`);
+              } else {
+                console.error('❌ Error removing label:', error);
+                throw error;
+              }
+            }
