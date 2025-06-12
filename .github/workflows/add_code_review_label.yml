@@ -1,0 +1,56 @@
+name: Add Code Review Label on Review Request
+
+on:
+  pull_request:
+    types: [review_requested, ready_for_review]
+  pull_request_target:
+    types: [review_requested]
+
+jobs:
+  add-review-label:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Add code-review label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            try {
+              // Check if the label already exists on the PR
+              const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+                owner,
+                repo,
+                issue_number: prNumber
+              });
+              
+              const hasCodeReviewLabel = labels.some(label => label.name === 'code-review');
+              
+              if (!hasCodeReviewLabel) {
+                // Add the code-review label
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  labels: ['code-review']
+                });
+                
+                console.log(`✅ Added 'code-review' label to PR #${prNumber}`);
+              } else {
+                console.log(`ℹ️  PR #${prNumber} already has the 'code-review' label`);
+              }
+            } catch (error) {
+              if (error.status === 422) {
+                console.log(`ℹ️  Label 'code-review' doesn't exist in the repository. Please create it first.`);
+              } else {
+                console.error('❌ Error adding label:', error);
+                throw error;
+              }
+            } 
