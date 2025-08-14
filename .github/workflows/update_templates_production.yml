@@ -7,168 +7,161 @@ on:
       - main
     types:
       - closed
-permissions:
-  contents: read
 jobs:
-  update-templates-in-production:
-    if: github.event.pull_request.merged == true
+  check-deploy-to-partner-label:
     runs-on: ubuntu-latest
-    env:
-      SF_API_CLIENT_ID: "${{ secrets.SF_API_CLIENT_ID }}"
-      SF_API_SECRET: "${{ secrets.SF_API_SECRET }}"
+    outputs:
+      has_partner_deployment_label: ${{ steps.haslabel.outputs.labeled-3-deploy-to-partner }}
     steps:
       - name: Checkout Repository - Fetch all history for all tags and branches
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup Node v18
-        uses: actions/setup-node@v3
+      - name: Labeled to partner deployment
+        id: haslabel
+        uses: DanielTamkin/HasLabel@v1.0.4
         with:
-          node-version: 18
-      - name: Add silverfin-cli package latest version
-        run: |
-          npm install https://github.com/silverfin/silverfin-cli.git
-          VERSION=$(./node_modules/silverfin-cli/bin/cli.js -V)
-          echo "CLI version: ${VERSION}"
-      - name: Create Silverfin config file
-        run: |
-          mkdir -p $HOME/.silverfin/
-          touch $HOME/.silverfin/config.json
-          echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
-          node ./node_modules/silverfin-cli/bin/cli.js config --set-firm="${{ vars.FIRM_ID_PRODUCTION }}"
-          node ./node_modules/silverfin-cli/bin/cli.js config --get-firm
+          contains: "3-deploy-to-partner"
+
+  check-changed-templates:
+    runs-on: ubuntu-latest
+    outputs:
+      changed_templates: ${{ steps.templates_changed.outputs.changed_templates }}
+    steps:
+      - name: Checkout Repository - Fetch all history for all tags and branches
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Get changed liquid files
         id: changed-files
-        uses: tj-actions/changed-files@v35
+        uses: tj-actions/changed-files@v46
         with:
           since_last_remote_commit: false
-          dir_names: true
+          dir_names: false
+          ref: 'main'
           files: |
-            **/*.liquid
-      - name: List all changed files
+            **/**.{liquid,yml,yaml,json}
+      - name: Filter templates changed
+        id: templates_changed
         run: |
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            echo "$file was changed"
-          done
-      - name: Update liquid templates
-        run: |
-          declare -a ERRORS
-          FIRM_ID=${{ vars.FIRM_ID_PRODUCTION }}
-
-          for CURRENT_DIR in ${{ steps.changed-files.outputs.all_changed_files }}; do
-            echo "Checking directory: ${CURRENT_DIR}"
-            while [[ "${CURRENT_DIR}" != "." ]]; do
-              if [[ -e "${CURRENT_DIR}/config.json" ]]; then
-                HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
-                echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
-
-                FIRM_IDS=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq -r ".[]")
-
-                # Set template type
-                TEMPLATE_TYPE=""
-                FLAG=""
-                if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
-                  TEMPLATE_TYPE="reconciliation"
-                  FLAG="--handle"
-                elif [[ "${CURRENT_DIR}" == *shared_parts* ]]; then
-                  TEMPLATE_TYPE="shared-part"
-                  FLAG="--shared-part"
-                fi
-                # TODO: handle missing type
-
-                # Do we already have the id of this template ?
-                TEMPLATE_ID_PRESENT=false
-                if  [[ "${FIRM_IDS[*]}" =~ "${FIRM_ID}" ]]; then
-                  TEMPLATE_ID_PRESENT=true
-                fi
-                echo "Is firm id ${FIRM_ID} present in the config.json of template ${HANDLE}?: ${TEMPLATE_ID_PRESENT}"
-
-                # If we don't have the ID, try to get it from the firm
-                if [[ "$TEMPLATE_ID_PRESENT" == 'false' ]]; then
-                  echo "Try to fetch the ID from firm id: ${FIRM_ID}"
-                  # get-reconciliation-id or get-shared-part-id
-                  OUTPUT_ID=$(node ./node_modules/silverfin-cli/bin/cli.js get-"${TEMPLATE_TYPE}"-id "${FLAG}"="${HANDLE}" --yes)
-                
-                  if [[ "$OUTPUT_ID" =~ "ID updated" ]]; then
-                    echo "Template: ${HANDLE} ID fetched from firm ${FIRM_ID}"
-                    TEMPLATE_ID_PRESENT=true
-                  elif [[ "$OUTPUT_ID" =~ "not found" ]]; then
-                    echo "Template: ${HANDLE} ID not found in firm ${FIRM_ID}"
-                  else
-                    echo "Command to fetch the ID failed"
-                  fi
-                fi
-
-                # Update or created. Based on the presence of a template ID
-                if  [[ "$TEMPLATE_ID_PRESENT" == 'true' ]]; then
-                  echo "Updating ${HANDLE}"
-                  # update-reconciliation or update-shared-part
-                  OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js update-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}" --yes)
-                  OPERATION_TYPE="update"
-                else
-                  echo "Creating ${HANDLE}"
-                  # create-reconciliation or create-shared-part
-                  OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js create-"${TEMPLATE_TYPE}" "${FLAG}"="${HANDLE}")
-                  OPERATION_TYPE="create"
-                fi
-
-                if [[ "$OUTPUT" =~ "201" ]]; then
-                  echo "Template ${HANDLE}: succesfully ${OPERATION_TYPE}d in firm ${FIRM_ID}" 
-                else
-                  echo "Template ${HANDLE}: failed to ${OPERATION_TYPE} in firm ${FIRM_ID}"
-                  ERRORS+=("${OUTPUT}")
-                fi
-
-                break
-              else
-                echo "Config file not found in directory: ${CURRENT_DIR}"
-                CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
-              fi
-            done
-          done
-
-          # CHECK ERRORS PRESENT
-          if [ ${#ERRORS[@]} -eq 0 ]; then
-              echo "All templates have been updated and/or created"
+          pattern="(?:reconciliation_texts|shared_parts|export_files|account_templates)/([^/]+)/"
+          changed_files="${{ steps.changed-files.outputs.all_changed_files }}"
+          if [ -n "$changed_files" ]; then
+            filtered_names=($(printf "%s\n" "$changed_files" | grep -oP "$pattern" || true))
+            if [ $? -ne 0 ]; then
+              echo "No files match the pattern"
+              changed_templates=()
+            else
+              # Remove the trailing "/" from the extracted names
+              filtered_names=("${filtered_names[@]%/}")
+              # Remove duplicates
+              changed_templates=($(printf "%s\n" "${filtered_names[@]}" | sort -u))
+            fi
           else
-              echo "Errors: ${ERRORS[@]}"
-              exit 1
+            echo "No changed files"
+            changed_templates=()
           fi
-      - name: Remove all labels
-        uses: rogerluan/label-remover@v1.0.1
-        with:
-          github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-      - name: Add deployed to production label
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          script: |
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ["4-deployed-to-production"]
-            })
-      # Not working because the PR is already closed
-      # - name: Add Comment to PR
-      #   uses: actions/github-script@v6
-      #   with:
-      #     script: |
-      #       github.rest.issues.createComment({
-      #         issue_number: context.issue.number,
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         body: 'All templates were updated (or created) succesfully in the "Production firm"'
-      #       })
-      - name: Prepare CONFIG_JSON for secret
-        run: |
-          CONFIG_JSON=$(cat $HOME/.silverfin/config.json | tr -d '\n')
-          echo "CONFIG_JSON=${CONFIG_JSON}" >> $GITHUB_ENV
-        if: always()
-      - name: Store CONFIG_JSON as secret
-        uses: gliech/create-github-secret-action@v1
-        with:
-          name: CONFIG_JSON
-          value: "${{ env.CONFIG_JSON }}"
-          pa_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-        if: always()
+          # Store outputs
+          if [ ${#changed_templates[@]} -eq 0 ]; then
+            echo "changed_templates=[]" >> $GITHUB_OUTPUT
+          else
+            echo "changed_templates=${changed_templates[*]}" >> $GITHUB_OUTPUT
+            # Print the templates names
+            for name in "${changed_templates[@]}"; do
+              echo "$name"
+            done
+          fi
+          exit 0
+
+  run-tests:
+    uses: ./.github/workflows/run_tests.yml
+    secrets: inherit
+    needs: check-deploy-to-partner-label
+
+
+  # update-templates-in-production:
+  #   runs-on: ubuntu-latest
+  #   if: github.event.pull_request.merged == true && needs.check-changed-templates.outputs.changed_templates != '[]'
+  #   needs: [run-tests, check-changed-templates]
+  #   env:
+  #     SF_API_CLIENT_ID: "${{ secrets.SF_API_CLIENT_ID }}"
+  #     SF_API_SECRET: "${{ secrets.SF_API_SECRET }}"
+  #     CHANGED_TEMPLATES: "${{ needs.check-changed-templates.outputs.changed_templates }}"
+  #   steps:
+  #     - name: Checkout Repository - Fetch all history for all tags and branches
+  #       uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
+  #     - name: Setup Node v18
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 18
+  #     - name: Add silverfin-cli package latest version
+  #       run: |
+  #         npm install https://github.com/silverfin/silverfin-cli.git
+  #         VERSION=$(./node_modules/silverfin-cli/bin/cli.js -V)
+  #         echo "CLI version: ${VERSION}"
+  #     - name: Create Silverfin config file
+  #       run: |
+  #         mkdir -p $HOME/.silverfin/
+  #         touch $HOME/.silverfin/config.json
+  #         echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
+  #     - name: Update liquid templates
+  #       run: |
+  #         declare -a ERRORS
+  #         FIRM_ID=${{ vars.FIRM_ID_PRODUCTION }}
+  #         for CURRENT_DIR in ${{ env.CHANGED_TEMPLATES }}; do
+  #           echo "Checking ${CURRENT_DIR}"
+  #           while [[ "${CURRENT_DIR}" != "." ]]; do
+  #             if [[ -e "${CURRENT_DIR}/config.json" ]]; then
+  #               echo "Found config.json in ${CURRENT_DIR}. Handle: ${HANDLE}"
+  #               HANDLE=$(cat ${CURRENT_DIR}/config.json | jq -r ".handle // .name")
+  #               FIRM_IDS=$(cat ${CURRENT_DIR}/config.json | jq -r ".id" | jq "keys_unsorted" | jq -r ".[]")
+  #               if  [[ "${FIRM_IDS[*]}" =~ "${FIRM_ID}" ]]; then
+  #                 # FETCH THE NEWEST VERSION OF THE TOKENS FROM THE SECRETS, IN CASE THEY WERE UPDATED BY THE INITIATION OF A CONCURRENT WORKFLOW
+  #                 echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
+  #                 if [[ "${CURRENT_DIR}" == *reconciliation_texts* ]]; then
+  #                   echo "Updating reconciliation ${HANDLE} in firm ${FIRM_ID}"
+  #                   OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js update-reconciliation --handle="${HANDLE}" --yes --firm "${FIRM_ID}")
+  #                 elif [[ "${CURRENT_DIR}" == *shared_parts* ]]; then
+  #                   echo "Updating shared part ${HANDLE} in firm ${FIRM_ID}"
+  #                   OUTPUT=$(node ./node_modules/silverfin-cli/bin/cli.js update-shared-part --shared-part="${HANDLE}" --yes --firm "${FIRM_ID}")
+  #                 fi
+  #                 if [[ "$OUTPUT" =~ "201" ]]; then
+  #                   echo "${HANDLE}: updated"
+  #                 else
+  #                   echo "${HANDLE}: failed"
+  #                   ERRORS+=("${OUTPUT}")
+  #                 fi
+  #               else
+  #                 echo "${HANDLE}: firm ${FIRM_ID} not present in config.json; skipping update"
+  #               fi
+  #               break
+  #             else
+  #               echo "Config file not found in ${CURRENT_DIR}"
+  #               CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
+  #             fi
+  #           done
+  #         done
+  #         # CHECK ERRORS PRESENT
+  #         if [ ${#ERRORS[@]} -eq 0 ]; then
+  #             echo "All templates have been updated"
+  #         else
+  #             echo "Errors: ${ERRORS[@]}"
+  #             exit 1
+  #         fi
+  #     - name: Remove all labels
+  #       uses: rogerluan/label-remover@v1.0.1
+  #       with:
+  #         github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
+  #     - name: Add 'in production' label
+  #       uses: actions/github-script@v6
+  #       with:
+  #         github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+  #         script: |
+  #           github.rest.issues.addLabels({
+  #             issue_number: context.issue.number,
+  #             owner: context.repo.owner,
+  #             repo: context.repo.repo,
+  #             labels: ["4-in-production"]
+  #           })
