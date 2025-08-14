@@ -1,0 +1,50 @@
+name: check-auth
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-tokens:
+    # There's missing feature within GitHub Actions where there's a max of 2 concurrent jobs that can be enqueued, if you exceed it, it will auto-cancel the job unfortunately and you need to manually re-run the "failed" job. A big thread for GitHub to add a feature for this is already open here: https://github.com/orgs/community/discussions/12835
+    concurrency:
+      group: refresh-tokens
+    runs-on: ubuntu-latest
+    env:
+      SF_API_CLIENT_ID: "${{ secrets.SF_API_CLIENT_ID }}"
+      SF_API_SECRET: "${{ secrets.SF_API_SECRET }}"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Add silverfin-cli package latest version
+        run: |
+          npm install https://github.com/silverfin/silverfin-cli.git
+          VERSION=$(./node_modules/silverfin-cli/bin/cli.js -V)
+          echo "[Action] CLI version: ${VERSION}"
+      - name: Create Silverfin config file
+        run: |
+          mkdir -p $HOME/.silverfin/
+          touch $HOME/.silverfin/config.json
+          echo '${{ secrets.CONFIG_JSON }}' > $HOME/.silverfin/config.json
+      - name: Refresh tokens
+        run: |
+          CONFIG_JSON=$(cat $HOME/.silverfin/config.json)
+          for FIRM_ID in $(echo $CONFIG_JSON | jq 'del(.defaultFirmIDs, .host) | keys[]'); do
+            FIRM_ID=$(echo $FIRM_ID | tr -d '"')
+            if [[ -n "$FIRM_ID" && "$FIRM_ID" =~ ^[0-9]+$  ]]; then
+              echo "[Action] refreshing token for firm $FIRM_ID"
+              node ./node_modules/silverfin-cli/bin/cli.js config --refresh-token $FIRM_ID
+            fi
+          done
+      - name: Prepare and store updated CONFIG_JSON as secret
+        run: |
+          CONFIG_JSON=$(cat $HOME/.silverfin/config.json | tr -d '\n')
+          echo "::add-mask::$CONFIG_JSON"
+          echo "$CONFIG_JSON" | gh secret set CONFIG_JSON
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
